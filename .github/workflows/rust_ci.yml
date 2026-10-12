@@ -33,6 +33,10 @@ jobs:
       - name: Setup Rust
         uses: esp-rs/xtensa-toolchain@v1.5
         with:
+          # Pin to the Rust version this project targets (rust-version = "1.93").
+          # "latest" pulls a much newer 2026-era toolchain whose Xtensa LLVM backend
+          # crashes with "Cannot select XtensaISD::PCREL_WRAPPER" on Slint-generated code.
+          version: "1.93.0.0"
           default: true
           buildtargets: esp32s3
           ldproxy: true
