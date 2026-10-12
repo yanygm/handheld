@@ -36,14 +36,28 @@ jobs:
           default: true
           buildtargets: esp32s3
           ldproxy: true
-      - name: Ensure 'esp' toolchain alias exists
-        # The repo's rust-toolchain.toml pins channel = "esp"; ensure an alias with that
-        # exact name exists in case the action installed a versioned toolchain name.
+      - name: Make 'esp' toolchain usable
+        # The repo's rust-toolchain.toml pins channel = "esp". Ensure a toolchain with that
+        # exact name exists, otherwise cargo fails with "custom toolchain 'esp' is not installed".
+        # NOTE: do NOT resolve the installed toolchain via `rustup which rustc` here, because that
+        # command honours the rust-toolchain.toml override and would itself fail before we can
+        # create the alias.
         run: |
-          if ! rustup toolchain list | awk '{print $1}' | grep -qx esp; then
-            ESP_ROOT="$(dirname "$(dirname "$(rustup which rustc)")")"
-            rustup toolchain link esp "$ESP_ROOT"
+          set -euo pipefail
+          if rustup toolchain list | awk '{print $1}' | grep -qx esp; then
+            echo "Toolchain 'esp' already present."
+          else
+            EXISTING="$(rustup toolchain list | awk '{print $1}' | grep -E '^esp' | head -n1)"
+            if [ -n "$EXISTING" ]; then
+              ESP_ROOT="$(dirname "$(dirname "$(rustup which --toolchain "$EXISTING" rustc)")")"
+              rustup toolchain link esp "$ESP_ROOT"
+              echo "Linked 'esp' -> $EXISTING"
+            else
+              echo "No 'esp*' toolchain found; disabling rust-toolchain.toml override."
+              mv rust-toolchain.toml /tmp/rust-toolchain.toml.bak
+            fi
           fi
           rustup toolchain list
+          rustc -vV
       - name: Run command
         run: cargo ${{ matrix.action.command }} ${{ matrix.action.args }}
