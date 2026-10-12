@@ -36,5 +36,14 @@ jobs:
           default: true
           buildtargets: esp32s3
           ldproxy: true
+      - name: Ensure 'esp' toolchain alias exists
+        # The repo's rust-toolchain.toml pins channel = "esp"; ensure an alias with that
+        # exact name exists in case the action installed a versioned toolchain name.
+        run: |
+          if ! rustup toolchain list | awk '{print $1}' | grep -qx esp; then
+            ESP_ROOT="$(dirname "$(dirname "$(rustup which rustc)")")"
+            rustup toolchain link esp "$ESP_ROOT"
+          fi
+          rustup toolchain list
       - name: Run command
         run: cargo ${{ matrix.action.command }} ${{ matrix.action.args }}

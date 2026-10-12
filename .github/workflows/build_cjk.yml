@@ -58,6 +58,17 @@ jobs:
           buildtargets: esp32s3
           ldproxy: true
 
+      - name: Ensure 'esp' toolchain alias exists
+        # The repo's rust-toolchain.toml pins channel = "esp", but the xtensa-toolchain
+        # action may install the toolchain under a versioned name (e.g. esp-1.84.0.0-...).
+        # Create an `esp` alias so the override file resolves regardless of the exact name.
+        run: |
+          if ! rustup toolchain list | awk '{print $1}' | grep -qx esp; then
+            ESP_ROOT="$(dirname "$(dirname "$(rustup which rustc)")")"
+            rustup toolchain link esp "$ESP_ROOT"
+          fi
+          rustup toolchain list
+
       - name: Install host tools
         run: sudo apt-get update && sudo apt-get install -y unzip patch
 
