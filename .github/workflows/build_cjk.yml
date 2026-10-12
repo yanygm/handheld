@@ -108,10 +108,21 @@ jobs:
       - name: Build firmware with bit-packed CJK font
         run: bash ./build_fusion_pixel_full.sh --release --features=${{ github.event.inputs.revision || 'rev4' }}
 
-      - name: Convert application image to UF2
+      - name: Install esptool
+        # cargo build only emits the ELF; make_uf2.py needs the ESP app-image .bin.
+        # esptool (pip) is the canonical Espressif tool to convert ELF -> app image.
+        run: pip3 install esptool
+
+      - name: Convert ELF to app image and wrap as UF2
+        # Flash params match espflash.toml (8 MB, 80 MHz, DIO). The app image is then
+        # wrapped into a UF2 at the factory partition offset (0x100000).
         run: |
-          python3 make_uf2.py \
-            target/xtensa-esp32s3-espidf/release/handheld.bin \
+          ELF=target/xtensa-esp32s3-espidf/release/handheld
+          BIN=target/xtensa-esp32s3-espidf/release/handheld.bin
+          esptool.py --chip esp32s3 elf2image \
+            --flash_mode dio --flash_freq 80m --flash_size 8MB \
+            -o "$BIN" "$ELF"
+          python3 make_uf2.py "$BIN" \
             gamebub-cjk-${{ github.event.inputs.revision || 'rev4' }}.uf2 \
             --base 0x100000 --hardware-major 4 --product 1 \
             --commit ${{ github.sha }}
