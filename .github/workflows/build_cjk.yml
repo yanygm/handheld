@@ -33,6 +33,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   ESP_IDF_VERSION: "v5.4.3"
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   build-cjk:
