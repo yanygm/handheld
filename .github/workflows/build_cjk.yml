@@ -1,0 +1,91 @@
+name: Build Chinese (CJK) Firmware
+
+# Automatically builds the Game Bub firmware with full Chinese (Fusion Pixel)
+# font support and uploads a flashable .uf2 artifact.
+#
+# Mirrors the method used in the gamebub-cjk-handheld project:
+#   1. fetch the Fusion Pixel CJK pixel font
+#   2. build with build_fusion_pixel_full.sh, which patches i-slint-core so the
+#      glyph atlas is stored 1 bit per pixel and bit-packs it (GAMEBUB_PACK_FUSION_PIXEL)
+#   3. wrap the application image into a UF2 at the factory partition offset (0x100000)
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - "**/*.md"
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: "Hardware revision to build (cargo feature)"
+        required: true
+        default: "rev4"
+        type: choice
+        options:
+          - rev1
+          - rev2
+          - rev3
+          - rev4
+
+env:
+  CARGO_TERM_COLOR: always
+  ESP_IDF_VERSION: "v5.4.3"
+
+jobs:
+  build-cjk:
+    name: Build Fusion Pixel CJK firmware (${{ github.event.inputs.revision || 'rev4' }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache ESP-IDF toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.espressif
+          key: esp-idf-${{ env.ESP_IDF_VERSION }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Setup Rust (Xtensa ESP32-S3)
+        uses: esp-rs/xtensa-toolchain@v1.5
+        with:
+          default: true
+          buildtargets: esp32s3
+          ldproxy: true
+
+      - name: Install host tools
+        run: sudo apt-get update && sudo apt-get install -y unzip patch
+
+      - name: Download Fusion Pixel CJK font
+        run: ./download_fusion_pixel_font.sh
+
+      - name: Populate cargo registry sources
+        # build_fusion_pixel_full.sh patches i-slint-core-1.12.1, whose extracted
+        # source must already live in the cargo registry cache. A release build
+        # extracts (and compiles) it, so the later patched build can reuse it.
+        run: cargo build --release
+
+      - name: Build firmware with bit-packed CJK font
+        run: ./build_fusion_pixel_full.sh --release --features=${{ github.event.inputs.revision || 'rev4' }}
+
+      - name: Convert application image to UF2
+        run: |
+          python3 make_uf2.py \
+            target/xtensa-esp32s3-espidf/release/handheld.bin \
+            gamebub-cjk-${{ github.event.inputs.revision || 'rev4' }}.uf2 \
+            --base 0x100000 --hardware-major 4 --product 1 \
+            --commit ${{ github.sha }}
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamebub-firmware-cjk-${{ github.event.inputs.revision || 'rev4' }}
+          path: |
+            gamebub-cjk-${{ github.event.inputs.revision || 'rev4' }}.uf2
+            target/xtensa-esp32s3-espidf/release/handheld.bin
+          if-no-files-found: error
