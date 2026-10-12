@@ -95,7 +95,9 @@ jobs:
         # build_fusion_pixel_full.sh patches i-slint-core-1.12.1, whose extracted
         # source must already live in the cargo registry cache. A release build
         # extracts (and compiles) it, so the later patched build can reuse it.
-        run: cargo build --release
+        # The revision feature is required or the build fails with
+        # "No board revision selected".
+        run: cargo build --release --features=${{ github.event.inputs.revision || 'rev4' }}
 
       - name: Build firmware with bit-packed CJK font
         run: bash ./build_fusion_pixel_full.sh --release --features=${{ github.event.inputs.revision || 'rev4' }}
